@@ -17,11 +17,11 @@ Aria2 超·懒人包，一键配置Aria2。注册Aria2后台进程为系统服�
 
 ### 使用
 
-`aria2` 管理界面建议直接使用浏览器插件 [**Aria2 Explorer**](https://aria2e.com/) ，也可以使用本地网页文件 [**AriaNg**](https://github.com/mayswind/AriaNg)，压缩包内已附带。
+`Aria2` 管理界面建议直接使用浏览器插件 [**Aria2 Explorer**](https://aria2e.com/) ，也可以使用本地网页文件 [**AriaNg**](https://github.com/mayswind/AriaNg)，压缩包内已附带。
 
 ### 卸载
 
-1. 右键以管理员模式运行 `uninstall.bat`，等待脚本执行完毕，`aria2` 服务即卸载成功。
+1. 右键以管理员模式运行 `uninstall.bat`，等待脚本执行完毕，`Aria2Service` 服务即卸载成功。
 2. 然后手动删除文件夹 `Aria2` 即可。
 
 ## 程序修改
@@ -39,7 +39,7 @@ Aria2 超·懒人包，一键配置Aria2。注册Aria2后台进程为系统服�
 
 1. 下载地址见 [**AriaNg**](https://github.com/mayswind/AriaNg)。
 2. 下载相应版本的`AllInOne.zip` 压缩包，解压后用浏览器打开 `index.html` 文件即可。
-3. 若使用浏览器插件[**Aria2 Explorer**](https://aria2e.com/) 来管理 `aria2`，则不需要更新它。
+3. 若使用浏览器插件[**Aria2 Explorer**](https://aria2e.com/) 来管理 `Aria2`，则不需要更新它。
 
 ### 编辑 Aria2 配置
 
@@ -49,7 +49,7 @@ Aria2 超·懒人包，一键配置Aria2。注册Aria2后台进程为系统服�
 
 ### 编辑 shawl 命令
 
-`shawl` 不采用配置文件的方式，而是直接执行含参命令即可创建服务。如果需要修改命令，直接在`install.bat`中添加参数即可，具体参数可见 [**Shawl-Windows service wrapper for arbitrary commands**](https://github.com/mtkennerly/shawl/blob/master/docs/cli.md)。
+`Shawl` 不采用配置文件的方式，而是直接执行含参命令即可创建服务。如果需要修改命令，直接在`install.bat`中添加参数即可，具体参数可见 [**Shawl-Windows service wrapper for arbitrary commands**](https://github.com/mtkennerly/shawl/blob/master/docs/cli.md)。
 
 ### trackers 更新
 
@@ -77,4 +77,5 @@ Aria2 超·懒人包，一键配置Aria2。注册Aria2后台进程为系统服�
 4. 添加最新 `trackers` 服务器，并添加 `trackers` 自动更新脚本。
 5. 改为使用`shawl`来创建系统服务。
 6. 添加 `dht.dat` 和 `dht6.dat` 文件，方便找到 `dht` 网络。
+
 
