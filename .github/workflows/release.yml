@@ -202,3 +202,20 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$RELEASE_TAG" \
             --notes-file release-notes.md
+
+      - name: Remove legacy releases
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -r '.[][] | select(.tag_name | test("^aria2-next-.*_AriaNg-.*$")) | [.id, .tag_name] | @tsv' \
+            > legacy-releases.tsv
+
+          while IFS=$'\t' read -r release_id legacy_tag; do
+            [[ -n "$release_id" ]] || continue
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id"
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$legacy_tag" >/dev/null 2>&1; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$legacy_tag"
+            fi
+          done < legacy-releases.tsv
