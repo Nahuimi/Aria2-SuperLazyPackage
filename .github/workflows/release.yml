@@ -1,6 +1,11 @@
 name: Package latest aria2-next and AriaNg
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/release.yml"
   schedule:
     - cron: "23 2 * * *"
   workflow_dispatch:
@@ -23,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Resolve latest upstream releases
-        id: versions
+        id: upstream
         shell: bash
         run: |
           set -euo pipefail
@@ -35,8 +40,6 @@ jobs:
           ariang_tag="$(jq -er '.tag_name' ariang-release.json)"
           aria2_version="${aria2_tag#v}"
           ariang_version="${ariang_tag#v}"
-          release_tag="aria2-next-${aria2_version}_AriaNg-${ariang_version}"
-
           aria2_url="$(jq -er '[.assets[] | select(.name | test("windows-x86_64\\.exe$"))] | if length == 1 then .[0].browser_download_url else error("Expected one Windows x86_64 asset") end' aria2-next-release.json)"
           checksum_url="$(jq -er '[.assets[] | select(.name | test("checksums\\.sha256$"))] | if length == 1 then .[0].browser_download_url else error("Expected one checksum asset") end' aria2-next-release.json)"
           ariang_url="$(jq -er '[.assets[] | select(.name | test("AllInOne\\.zip$"))] | if length == 1 then .[0].browser_download_url else error("Expected one AllInOne asset") end' ariang-release.json)"
@@ -46,38 +49,75 @@ jobs:
             echo "aria2_version=$aria2_version"
             echo "ariang_tag=$ariang_tag"
             echo "ariang_version=$ariang_version"
-            echo "release_tag=$release_tag"
             echo "aria2_url=$aria2_url"
             echo "checksum_url=$checksum_url"
             echo "ariang_url=$ariang_url"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Check whether release already exists
-        id: existing
+      - name: Determine package release version
+        id: release
         shell: bash
         env:
-          RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
-        run: |
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build package
-        if: steps.existing.outputs.exists == 'false'
-        id: package
-        shell: bash
-        env:
-          ARIA2_URL: ${{ steps.versions.outputs.aria2_url }}
-          CHECKSUM_URL: ${{ steps.versions.outputs.checksum_url }}
-          ARIA2_VERSION: ${{ steps.versions.outputs.aria2_version }}
-          ARIANG_URL: ${{ steps.versions.outputs.ariang_url }}
-          ARIANG_VERSION: ${{ steps.versions.outputs.ariang_version }}
+          ARIA2_TAG: ${{ steps.upstream.outputs.aria2_tag }}
+          ARIA2_VERSION: ${{ steps.upstream.outputs.aria2_version }}
+          ARIANG_TAG: ${{ steps.upstream.outputs.ariang_tag }}
+          ARIANG_VERSION: ${{ steps.upstream.outputs.ariang_version }}
         run: |
           set -euo pipefail
 
-          package_name="Aria2-SuperLazyPackage_aria2-next-${ARIA2_VERSION}_AriaNg-${ARIANG_VERSION}.zip"
+          marker="<!-- upstream:aria2-next=${ARIA2_TAG};AriaNg=${ARIANG_TAG} -->"
+          legacy_tag="aria2-next-${ARIA2_VERSION}_AriaNg-${ARIANG_VERSION}"
+
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > release-pages.json
+          jq '[.[][]]' release-pages.json > releases.json
+
+          current_release_id="$(jq -r --arg marker "$marker" '[.[] | select((.body // "") | contains($marker))][0].id // empty' releases.json)"
+          if [[ -n "$current_release_id" ]]; then
+            current_tag="$(jq -r --argjson id "$current_release_id" '.[] | select(.id == $id) | .tag_name' releases.json)"
+            {
+              echo "needs_release=false"
+              echo "migrate=false"
+              echo "release_tag=$current_tag"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest_version="$(jq -r '[.[] | select(.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) | .tag_name[1:] | split(".") | map(tonumber)] | sort | last // empty | join(".")' releases.json)"
+          legacy_release_id="$(jq -r --arg tag "$legacy_tag" '[.[] | select(.tag_name == $tag)][0].id // empty' releases.json)"
+
+          if [[ -z "$latest_version" ]]; then
+            release_tag="v0.0.1"
+          else
+            IFS=. read -r major minor patch <<< "$latest_version"
+            release_tag="v${major}.${minor}.$((patch + 1))"
+          fi
+
+          if [[ -n "$legacy_release_id" && -z "$latest_version" ]]; then
+            migrate=true
+          else
+            migrate=false
+          fi
+
+          {
+            echo "needs_release=true"
+            echo "migrate=$migrate"
+            echo "legacy_tag=$legacy_tag"
+            echo "release_id=$legacy_release_id"
+            echo "release_tag=$release_tag"
+            echo "package_name=Aria2-SuperLazyPackage_${release_tag}.zip"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build package
+        if: steps.release.outputs.needs_release == 'true' && steps.release.outputs.migrate == 'false'
+        shell: bash
+        env:
+          ARIA2_URL: ${{ steps.upstream.outputs.aria2_url }}
+          CHECKSUM_URL: ${{ steps.upstream.outputs.checksum_url }}
+          ARIANG_URL: ${{ steps.upstream.outputs.ariang_url }}
+          PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
+        run: |
+          set -euo pipefail
+
           mkdir -p build/Aria2/AriaNg downloads
 
           while IFS= read -r -d '' file; do
@@ -99,15 +139,14 @@ jobs:
           curl --fail --location --retry 3 "$ARIANG_URL" --output downloads/AriaNg-AllInOne.zip
           unzip -q downloads/AriaNg-AllInOne.zip -d build/Aria2/AriaNg
 
-          (cd build && zip -9 -r "../$package_name" Aria2)
-          echo "name=$package_name" >> "$GITHUB_OUTPUT"
+          (cd build && zip -9 -r "../$PACKAGE_NAME" Aria2)
 
       - name: Write release notes
-        if: steps.existing.outputs.exists == 'false'
+        if: steps.release.outputs.needs_release == 'true'
         shell: bash
         env:
-          ARIA2_TAG: ${{ steps.versions.outputs.aria2_tag }}
-          ARIANG_TAG: ${{ steps.versions.outputs.ariang_tag }}
+          ARIA2_TAG: ${{ steps.upstream.outputs.aria2_tag }}
+          ARIANG_TAG: ${{ steps.upstream.outputs.ariang_tag }}
         run: |
           cat > release-notes.md <<EOF
           ## 内含版本
@@ -116,19 +155,50 @@ jobs:
           - [AriaNg ${ARIANG_TAG}](https://github.com/mayswind/AriaNg/releases/tag/${ARIANG_TAG})（AllInOne）
 
           此安装包由 GitHub Actions 自动获取上游最新稳定版并打包。
+
+          <!-- upstream:aria2-next=${ARIA2_TAG};AriaNg=${ARIANG_TAG} -->
           EOF
 
-      - name: Create GitHub release
-        if: steps.existing.outputs.exists == 'false'
+      - name: Migrate legacy release to v0.0.1
+        if: steps.release.outputs.needs_release == 'true' && steps.release.outputs.migrate == 'true'
         shell: bash
         env:
-          RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
-          PACKAGE_NAME: ${{ steps.package.outputs.name }}
-          ARIA2_TAG: ${{ steps.versions.outputs.aria2_tag }}
-          ARIANG_TAG: ${{ steps.versions.outputs.ariang_tag }}
+          LEGACY_TAG: ${{ steps.release.outputs.legacy_tag }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
+        run: |
+          set -euo pipefail
+
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$RELEASE_TAG" \
+              -f sha="$GITHUB_SHA" >/dev/null
+          fi
+
+          jq -n \
+            --arg tag "$RELEASE_TAG" \
+            --arg name "$RELEASE_TAG" \
+            --rawfile body release-notes.md \
+            '{tag_name: $tag, name: $name, body: $body}' > update-release.json
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            --input update-release.json > migrated-release.json
+
+          asset_id="$(jq -er '[.assets[] | select(.name | endswith(".zip"))] | if length == 1 then .[0].id else error("Expected one ZIP asset") end' migrated-release.json)"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" \
+            -f name="$PACKAGE_NAME" >/dev/null
+
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$LEGACY_TAG"
+
+      - name: Create GitHub release
+        if: steps.release.outputs.needs_release == 'true' && steps.release.outputs.migrate == 'false'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
         run: |
           gh release create "$RELEASE_TAG" "$PACKAGE_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "aria2-next ${ARIA2_TAG} + AriaNg ${ARIANG_TAG}" \
+            --title "$RELEASE_TAG" \
             --notes-file release-notes.md
