@@ -1,0 +1,134 @@
+name: Package latest aria2-next and AriaNg
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: package-latest-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve latest upstream releases
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh api repos/AnInsomniacy/aria2-next/releases/latest > aria2-next-release.json
+          gh api repos/mayswind/AriaNg/releases/latest > ariang-release.json
+
+          aria2_tag="$(jq -er '.tag_name' aria2-next-release.json)"
+          ariang_tag="$(jq -er '.tag_name' ariang-release.json)"
+          aria2_version="${aria2_tag#v}"
+          ariang_version="${ariang_tag#v}"
+          release_tag="aria2-next-${aria2_version}_AriaNg-${ariang_version}"
+
+          aria2_url="$(jq -er '[.assets[] | select(.name | test("windows-x86_64\\.exe$"))] | if length == 1 then .[0].browser_download_url else error("Expected one Windows x86_64 asset") end' aria2-next-release.json)"
+          checksum_url="$(jq -er '[.assets[] | select(.name | test("checksums\\.sha256$"))] | if length == 1 then .[0].browser_download_url else error("Expected one checksum asset") end' aria2-next-release.json)"
+          ariang_url="$(jq -er '[.assets[] | select(.name | test("AllInOne\\.zip$"))] | if length == 1 then .[0].browser_download_url else error("Expected one AllInOne asset") end' ariang-release.json)"
+
+          {
+            echo "aria2_tag=$aria2_tag"
+            echo "aria2_version=$aria2_version"
+            echo "ariang_tag=$ariang_tag"
+            echo "ariang_version=$ariang_version"
+            echo "release_tag=$release_tag"
+            echo "aria2_url=$aria2_url"
+            echo "checksum_url=$checksum_url"
+            echo "ariang_url=$ariang_url"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check whether release already exists
+        id: existing
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build package
+        if: steps.existing.outputs.exists == 'false'
+        id: package
+        shell: bash
+        env:
+          ARIA2_URL: ${{ steps.versions.outputs.aria2_url }}
+          CHECKSUM_URL: ${{ steps.versions.outputs.checksum_url }}
+          ARIA2_VERSION: ${{ steps.versions.outputs.aria2_version }}
+          ARIANG_URL: ${{ steps.versions.outputs.ariang_url }}
+          ARIANG_VERSION: ${{ steps.versions.outputs.ariang_version }}
+        run: |
+          set -euo pipefail
+
+          package_name="Aria2-SuperLazyPackage_aria2-next-${ARIA2_VERSION}_AriaNg-${ARIANG_VERSION}.zip"
+          mkdir -p build/Aria2/AriaNg downloads
+
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              .github/*|aria2c.exe) continue ;;
+            esac
+            mkdir -p "build/Aria2/$(dirname "$file")"
+            cp "$file" "build/Aria2/$file"
+          done < <(git ls-files -z)
+
+          curl --fail --location --retry 3 "$ARIA2_URL" --output downloads/aria2c.exe
+          curl --fail --location --retry 3 "$CHECKSUM_URL" --output downloads/checksums.sha256
+          aria2_asset_name="$(basename "${ARIA2_URL%%\?*}")"
+          expected_hash="$(awk -v name="$aria2_asset_name" '$2 == name { print $1 }' downloads/checksums.sha256)"
+          test -n "$expected_hash"
+          echo "$expected_hash  downloads/aria2c.exe" | sha256sum --check --strict
+          cp downloads/aria2c.exe build/Aria2/aria2c.exe
+
+          curl --fail --location --retry 3 "$ARIANG_URL" --output downloads/AriaNg-AllInOne.zip
+          unzip -q downloads/AriaNg-AllInOne.zip -d build/Aria2/AriaNg
+
+          (cd build && zip -9 -r "../$package_name" Aria2)
+          echo "name=$package_name" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        if: steps.existing.outputs.exists == 'false'
+        shell: bash
+        env:
+          ARIA2_TAG: ${{ steps.versions.outputs.aria2_tag }}
+          ARIANG_TAG: ${{ steps.versions.outputs.ariang_tag }}
+        run: |
+          cat > release-notes.md <<EOF
+          ## 内含版本
+
+          - [aria2-next ${ARIA2_TAG}](https://github.com/AnInsomniacy/aria2-next/releases/tag/${ARIA2_TAG})（Windows x86_64）
+          - [AriaNg ${ARIANG_TAG}](https://github.com/mayswind/AriaNg/releases/tag/${ARIANG_TAG})（AllInOne）
+
+          此安装包由 GitHub Actions 自动获取上游最新稳定版并打包。
+          EOF
+
+      - name: Create GitHub release
+        if: steps.existing.outputs.exists == 'false'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
+          PACKAGE_NAME: ${{ steps.package.outputs.name }}
+          ARIA2_TAG: ${{ steps.versions.outputs.aria2_tag }}
+          ARIANG_TAG: ${{ steps.versions.outputs.ariang_tag }}
+        run: |
+          gh release create "$RELEASE_TAG" "$PACKAGE_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "aria2-next ${ARIA2_TAG} + AriaNg ${ARIANG_TAG}" \
+            --notes-file release-notes.md

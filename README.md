@@ -11,7 +11,7 @@ Aria2 超·懒人包，一键配置Aria2。注册Aria2后台进程为系统服�
 
 ### 安装
 
-1. 解压目录下的 `Aria2.zip`，并将解压后的文件夹 `Aria2` 复制到想要安装的位置。
+1. 从 [**GitHub Releases**](https://github.com/Nahuimi/Aria2-SuperLazyPackage/releases) 下载最新的 ZIP 压缩包，解压后将文件夹 `Aria2` 复制到想要安装的位置。
 2. 右键以管理员模式运行 `install.bat`，等待脚本执行完毕，`Aria2Service` 服务即安装成功。
 3. 在任务管理器的“详细信息”中，查看“服务”部分，可以看到 `Aria2Service` 服务正在运行。
 
@@ -28,16 +28,14 @@ Aria2 超·懒人包，一键配置Aria2。注册Aria2后台进程为系统服�
 
 ### aria2 主程序更新
 
-1. `aria2c.exe` 的官方下载地址见 [**aria2 - The ultra fast download utility**](https://github.com/aria2/aria2)，而本懒人包采用的是解除单服务器线程数限制编译版，见 [**aria2 build scripts on msys2 with custom patches**](https://github.com/myfreeer/aria2-build-msys2)。
-
-   **注意：如果打算更换为官方版，本懒人包配置文件的部分设置可能会不兼容（主要是线程设置等等），记得修改配置文件。**
-3. 在任务管理器的“详细信息”中，选中 `Aria2Service` 服务，右键停止。
-4. 下载相应版本的 `aria2c.exe` 文件，覆盖 `Aria2` 目录下的文件即可。
-5. 在任务管理器的“详细信息”中，选中 `Aria2Service` 服务，右键开始。
+1. 本懒人包采用持续维护的 [**aria2-next**](https://github.com/AnInsomniacy/aria2-next) Windows x86_64 版本。仓库不保存可执行文件，GitHub Releases 中的懒人包会在构建时自动下载并校验最新版。
+2. 在任务管理器的“详细信息”中，选中 `Aria2Service` 服务，右键停止。
+3. 下载相应版本的 `aria2c.exe` 文件，覆盖 `Aria2` 目录下的文件即可。
+4. 在任务管理器的“详细信息”中，选中 `Aria2Service` 服务，右键开始。
 
 ### AriaNg 界面更新
 
-1. 下载地址见 [**AriaNg**](https://github.com/mayswind/AriaNg)。
+1. 下载地址见 [**AriaNg**](https://github.com/mayswind/AriaNg)。GitHub Releases 中的懒人包会自动包含其最新稳定版。
 2. 下载相应版本的`AllInOne.zip` 压缩包，解压后用浏览器打开 `index.html` 文件即可。
 3. 若使用浏览器插件[**Aria2 Explorer**](https://aria2e.com/) 来管理 `Aria2`，则不需要更新它。
 
@@ -71,11 +69,15 @@ Aria2 超·懒人包，一键配置Aria2。注册Aria2后台进程为系统服�
 
 具体内容如下：
 
-1. 替换 `aria2c.exe` 为解除单服务器线程数限制编译版，更新到 `1.37.0` 版本。
-2. 更新 `AriaNg` 到 `1.3.11` 版本，不过更推荐采用浏览器插件进行管理。
+1. 构建时下载 [**aria2-next**](https://github.com/AnInsomniacy/aria2-next) 的最新稳定版，并校验上游提供的 SHA-256。
+2. 自动打包最新稳定版 `AriaNg`，不过更推荐采用浏览器插件进行管理。
 3. 修改 `aria2.conf` 配置文件，增加下载线程、添加详细注释等。
 4. 添加最新 `trackers` 服务器，并添加 `trackers` 自动更新脚本。
 5. 改为使用`shawl`来创建系统服务。
 6. 添加 `dht.dat` 和 `dht6.dat` 文件，方便找到 `dht` 网络。
+
+## 自动发布
+
+GitHub Actions 每天检查一次 `aria2-next` 和 `AriaNg` 的最新稳定版。任一项目发布新版本后，工作流会自动生成新的 GitHub Release；发布说明及压缩包文件名均会标明两个上游版本。
 
 
