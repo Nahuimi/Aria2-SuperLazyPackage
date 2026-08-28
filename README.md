@@ -81,3 +81,16 @@ Aria2 超·懒人包，一键配置Aria2。注册Aria2后台进程为系统服�
 GitHub Actions 每天检查一次 `aria2-next` 和 `AriaNg` 的最新稳定版。首个懒人包版本为 `v0.0.1`；任一上游项目发布新版本后，懒人包版本的补丁号会自动加一，例如 `v0.0.2`。发布说明会标明两个上游项目的实际版本。
 
 
+### aria2-next / AriaNg 一键更新
+
+1. 将 `Update.bat` 与 `Update.ps1` 放到 `Aria2` 目录（与 `install.bat`、`aria2.conf` 同级）。
+2. 右键以管理员模式运行 `Update.bat`。
+3. 脚本会查询 [aria2-next](https://github.com/AnInsomniacy/aria2-next) 与 [AriaNg](https://github.com/mayswind/AriaNg) 的最新稳定版：下载 Windows 可执行文件并用上游 `checksums.sha256` 校验 SHA-256，再解压 AriaNg `AllInOne.zip` 到 `AriaNg` 目录。
+4. 若 `Aria2Service` 正在运行，脚本会先停止服务、替换 `aria2c.exe`，再重新启动。`aria2.conf`、会话和 DHT 文件不会被改动。
+5. 已是最新时会直接跳过；需要强制重装时，在 PowerShell 中执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Update.ps1 -Force
+```
+
+若使用浏览器插件 [Aria2 Explorer](https://aria2e.com/) 管理 Aria2，可以不更新 AriaNg，更新它也不影响插件。
