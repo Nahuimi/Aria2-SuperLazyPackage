@@ -1,30 +1,70 @@
 @echo off
+setlocal EnableExtensions
+cd /d "%~dp0"
 
-REM è®¾ç½®ç¼–ç æ ¼å¼ä¸º UTF-8
-chcp 65001 >nul
+set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+set "PS1=%~dp0Update.ps1"
+set "LOG=%~dp0Update.log"
 
-REM æ£€æŸ¥æ˜¯å¦ä»¥ç®¡ç†å‘˜èº«ä»½è¿è¡Œ
-fltmc >nul 2>&1 || (
-    echo è¯·ä»¥ç®¡ç†å‘˜èº«ä»½è¿è¡Œæ­¤è„šæœ¬ï¼
-    pause >nul
-    exit /b
-)
-
-REM å®šä¹‰è„šæœ¬æ‰€åœ¨ç›®å½•
-set CURRENT_DIR=%~dp0
-
-echo æ­£åœ¨æ›´æ–° aria2-next ä¸Ž AriaNg ...
+echo ==============================================
+echo  Aria2 SuperLazyPackage  Update
+echo ==============================================
 echo.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CURRENT_DIR%Update.ps1" -NoPause
-set EXITCODE=%ERRORLEVEL%
+echo [%date% %time%] Update.bat start>>"%LOG%"
+
+if not exist "%PS%" (
+    echo [ERROR] powershell.exe not found.
+    echo ÕÒ²»µ½ PowerShell¡£
+    echo.
+    pause
+    exit /b 1
+)
+
+if not exist "%PS1%" (
+    echo [ERROR] Update.ps1 not found.
+    echo ÕÒ²»µ½ Update.ps1£¬±ØÐëºÍ Update.bat ·ÅÔÚÍ¬Ò»¸ö Aria2 Ä¿Â¼¡£
+    echo.
+    pause
+    exit /b 1
+)
+
+net session >nul 2>&1
+if not %errorlevel%==0 (
+    echo [ERROR] Administrator privileges required.
+    echo.
+    echo ÇëÓÒ¼ü±¾ÎÄ¼þ£¬Ñ¡Ôñ¡¸ÒÔ¹ÜÀíÔ±Éí·ÝÔËÐÐ¡¹¡£
+    echo Ë«»÷ÔËÐÐÃ»ÓÐÈ¨ÏÞ£¬´°¿Ú»áÍ£ÔÚÕâÀï£¬²»»á×Ô¶¯Éý¼¶¡£
+    echo.
+    echo [%date% %time%] not admin>>"%LOG%"
+    pause
+    exit /b 1
+)
+
+echo Updating aria2-next and AriaNg...
+echo ÕýÔÚ¸üÐÂ£¬ÇëµÈ´ýÏÂÔØ½áÊø£¬²»Òª¹Ø±Õ´°¿Ú¡£
+echo Log: %LOG%
+echo.
+
+"%PS%" -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File -LiteralPath '%PS1%' -ErrorAction SilentlyContinue"
+
+set "FORCEARG="
+if /I "%~1"=="force" set "FORCEARG=-Force"
+if /I "%~1"=="-Force" set "FORCEARG=-Force"
+
+"%PS%" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -NoPause %FORCEARG%
+set "EXITCODE=%ERRORLEVEL%"
+
+chcp 936 >nul
 
 echo.
 if not "%EXITCODE%"=="0" (
-    echo æ›´æ–°å¤±è´¥ï¼Œé€€å‡ºç  %EXITCODE%ã€‚
+    echo Update failed, exit code %EXITCODE%.
+    echo ¸üÐÂÊ§°Ü¡£Çë°ÑÍ¬Ä¿Â¼ Update.log µÄÄÚÈÝ·¢³öÀ´ÒÔ±ãÅÅ²é¡£
 ) else (
-    echo æ‰§è¡Œå®Œæ¯•ã€‚
+    echo Done.
+    echo Ö´ÐÐÍê±Ï¡£
 )
-echo æŒ‰ä»»æ„é”®é€€å‡º...
-pause >nul
+echo.
+pause
 exit /b %EXITCODE%
